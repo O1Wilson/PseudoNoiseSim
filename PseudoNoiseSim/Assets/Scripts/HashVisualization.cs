@@ -13,15 +13,16 @@ public class HashVisualization : MonoBehaviour {
 
         [WriteOnly]
         public NativeArray<uint> hashes;
-
         public int resolution;
-
         public float invResolution;
+        public SmallXXHash hash;
 
         public void Execute(int i) {
-            float v = floor(invResolution * i + 0.00001f);
-            float u = i - resolution * v;
-            hashes[i] = (uint)(frac(u * v * 0.381f) * 256f);
+            int v = (int)floor(invResolution * i + 0.00001f);
+            int u = i - resolution * v - resolution / 2;
+            v -= resolution / 2;
+
+            hashes[i] = hash.Eat(u).Eat(v);
         }
     }
 
@@ -38,6 +39,12 @@ public class HashVisualization : MonoBehaviour {
     [SerializeField, Range(1, 512)]
     int resolution = 16;
 
+    [SerializeField, Range(-2f, 2f)]
+    float verticalOffset = 1f;
+
+    [SerializeField]
+    int seed;
+
     NativeArray<uint> hashes;
 
     ComputeBuffer hashesBuffer;
@@ -52,14 +59,17 @@ public class HashVisualization : MonoBehaviour {
         new HashJob {
             hashes = hashes,
             resolution = resolution,
-            invResolution = 1f / resolution
+            invResolution = 1f / resolution,
+            hash = SmallXXHash.Seed(seed)
         }.ScheduleParallel(hashes.Length, resolution, default).Complete();
 
         hashesBuffer.SetData(hashes);
 
         propertyBlock ??= new MaterialPropertyBlock();
         propertyBlock.SetBuffer(hashesId, hashesBuffer);
-        propertyBlock.SetVector(configId, new Vector4(resolution, 1f / resolution));
+        propertyBlock.SetVector(configId, new Vector4(
+            resolution, 1f / resolution, verticalOffset / resolution
+            ));
     }
 
     void OnDisable() {
@@ -77,8 +87,8 @@ public class HashVisualization : MonoBehaviour {
 
     void Update() {
         Graphics.DrawMeshInstancedProcedural(
-                instanceMesh, 0, material, new Bounds(Vector3.zero, Vector3.one),
-                hashes.Length, propertyBlock
-            );
+            instanceMesh, 0, material, new Bounds(Vector3.zero, Vector3.one),
+            hashes.Length, propertyBlock
+        );
     }
 }
